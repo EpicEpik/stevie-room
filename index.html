@@ -2,27 +2,13 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Stevie Room 2D</title>
+<title>Line Corridor</title>
 <style>
   body { margin: 0; background: black; }
-  #info {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    color: white;
-    font-family: monospace;
-    background: rgba(0,0,0,0.5);
-    padding: 8px;
-  }
+  canvas { display: block; margin: auto; background: #111; }
 </style>
 </head>
 <body>
-
-<div id="info">
-  Arrow keys to move.<br>
-  Click the bulb to toggle light.<br>
-  Click toys to inspect them.
-</div>
 
 <canvas id="game" width="800" height="600"></canvas>
 
@@ -30,111 +16,49 @@
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-let bulbOn = true;
-
-// Player
-let player = { x: 100, y: 100, size: 20 };
-
-// Walls (Scratch-style rectangles)
-let walls = [
-  {x: 50, y: 50, w: 700, h: 20},
-  {x: 50, y: 530, w: 700, h: 20},
-  {x: 50, y: 50, w: 20, h: 500},
-  {x: 730, y: 50, w: 20, h: 500}
-];
-
-// Toys (clickable)
-let toys = [
-  {x: 300, y: 200, w: 40, h: 40, id: "toy_1"},
-  {x: 500, y: 300, w: 40, h: 40, id: "toy_2"},
-  {x: 400, y: 400, w: 40, h: 40, id: "toy_3"}
-];
-
-// Bulb (clickable)
-let bulb = {x: 380, y: 100, w: 40, h: 40};
-
-// Movement
-let keys = {};
-document.addEventListener("keydown", e => keys[e.key] = true);
-document.addEventListener("keyup", e => keys[e.key] = false);
-
-// Click detection
-canvas.addEventListener("mousedown", e => {
-  let rect = canvas.getBoundingClientRect();
-  let mx = e.clientX - rect.left;
-  let my = e.clientY - rect.top;
-
-  // Bulb toggle
-  if (mx > bulb.x && mx < bulb.x + bulb.w &&
-      my > bulb.y && my < bulb.y + bulb.h) {
-    bulbOn = !bulbOn;
-    return;
-  }
-
-  // Toys
-  for (let t of toys) {
-    if (mx > t.x && mx < t.x + t.w &&
-        my > t.y && my < t.y + t.h) {
-      alert("You inspected: " + t.id);
-      return;
-    }
-  }
-});
-
-// Collision check
-function collides(nx, ny) {
-  for (let w of walls) {
-    if (nx < w.x + w.w &&
-        nx + player.size > w.x &&
-        ny < w.y + w.h &&
-        ny + player.size > w.y) {
-      return true;
-    }
-  }
-  return false;
-}
-
-// Game loop
-function loop() {
-  let nx = player.x;
-  let ny = player.y;
-
-  if (keys["ArrowUp"]) ny -= 3;
-  if (keys["ArrowDown"]) ny += 3;
-  if (keys["ArrowLeft"]) nx -= 3;
-  if (keys["ArrowRight"]) nx += 3;
-
-  if (!collides(nx, ny)) {
-    player.x = nx;
-    player.y = ny;
-  }
-
-  draw();
-  requestAnimationFrame(loop);
-}
-
-function draw() {
-  ctx.fillStyle = bulbOn ? "#222" : "#000";
+// draw corridor as lines
+function drawCorridor() {
+  ctx.fillStyle = "#111";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Walls
-  ctx.fillStyle = "gray";
-  for (let w of walls) ctx.fillRect(w.x, w.y, w.w, w.h);
+  ctx.strokeStyle = "#00ffff";
+  ctx.lineWidth = 2;
 
-  // Bulb
-  ctx.fillStyle = bulbOn ? "yellow" : "darkgoldenrod";
-  ctx.fillRect(bulb.x, bulb.y, bulb.w, bulb.h);
+  // vertical “walls” converging to a vanishing point
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
 
-  // Toys
-  ctx.fillStyle = "brown";
-  for (let t of toys) ctx.fillRect(t.x, t.y, t.w, t.h);
+  for (let i = 0; i < 10; i++) {
+    let offset = 40 + i * 20;
+    ctx.beginPath();
+    ctx.moveTo(centerX - offset, 0);
+    ctx.lineTo(centerX - offset / 2, centerY);
+    ctx.stroke();
 
-  // Player
-  ctx.fillStyle = "cyan";
-  ctx.fillRect(player.x, player.y, player.size, player.size);
+    ctx.beginPath();
+    ctx.moveTo(centerX + offset, 0);
+    ctx.lineTo(centerX + offset / 2, centerY);
+    ctx.stroke();
+  }
+
+  // floor + ceiling lines
+  ctx.strokeStyle = "#88aa55";
+  for (let i = 0; i < 8; i++) {
+    let y = centerY + i * 25;
+    ctx.beginPath();
+    ctx.moveTo(centerX - 200 + i * 10, y);
+    ctx.lineTo(centerX + 200 - i * 10, y);
+    ctx.stroke();
+
+    let y2 = centerY - i * 25;
+    ctx.beginPath();
+    ctx.moveTo(centerX - 200 + i * 10, y2);
+    ctx.lineTo(centerX + 200 - i * 10, y2);
+    ctx.stroke();
+  }
 }
 
-loop();
+drawCorridor();
 </script>
 
 </body>
