@@ -1,270 +1,141 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <title>Stevie's Room</title>
-  <style>
-    body { margin: 0; overflow: hidden; background: #000; }
-    canvas { display: block; }
-    #info {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      color: #fff;
-      font-family: monospace;
-      font-size: 12px;
-      background: rgba(0,0,0,0.5);
-      padding: 8px 10px;
-      border-radius: 4px;
-    }
-    #message {
-      position: absolute;
-      bottom: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: #fff;
-      font-family: monospace;
-      font-size: 13px;
-      background: rgba(0,0,0,0.7);
-      padding: 6px 10px;
-      border-radius: 4px;
-      opacity: 0;
-      transition: opacity 0.2s;
-      pointer-events: none;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>Stevie Room 2D</title>
+<style>
+  body { margin: 0; background: black; }
+  #info {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    color: white;
+    font-family: monospace;
+    background: rgba(0,0,0,0.5);
+    padding: 8px;
+  }
+</style>
 </head>
 <body>
+
 <div id="info">
+  Arrow keys to move.<br>
   Click the bulb to toggle light.<br>
   Click toys to inspect them.
 </div>
-<div id="message"></div>
 
-<!-- ⭐ NON-MODULE THREE.JS (WORKS ON ALL DEVICES) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-
-<!-- ⭐ ORBIT CONTROLS (ALSO NON-MODULE) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/controls/OrbitControls.js"></script>
+<canvas id="game" width="800" height="600"></canvas>
 
 <script>
-let scene, camera, renderer, controls;
-let raycaster, mouse;
-let bulbMesh, bulbLight;
-let toys = [];
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
 let bulbOn = true;
-const messageEl = document.getElementById('message');
 
-function showMessage(text) {
-  messageEl.textContent = text;
-  messageEl.style.opacity = '1';
-  clearTimeout(showMessage._timer);
-  showMessage._timer = setTimeout(() => {
-    messageEl.style.opacity = '0';
-  }, 1000);
-}
+// Player
+let player = { x: 100, y: 100, size: 20 };
 
-init();
-animate();
+// Walls (Scratch-style rectangles)
+let walls = [
+  {x: 50, y: 50, w: 700, h: 20},
+  {x: 50, y: 530, w: 700, h: 20},
+  {x: 50, y: 50, w: 20, h: 500},
+  {x: 730, y: 50, w: 20, h: 500}
+];
 
-function init() {
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x050509);
+// Toys (clickable)
+let toys = [
+  {x: 300, y: 200, w: 40, h: 40, id: "toy_1"},
+  {x: 500, y: 300, w: 40, h: 40, id: "toy_2"},
+  {x: 400, y: 400, w: 40, h: 40, id: "toy_3"}
+];
 
-  camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-  camera.position.set(0, 4, 10);
+// Bulb (clickable)
+let bulb = {x: 380, y: 100, w: 40, h: 40};
 
-  renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  document.body.appendChild(renderer.domElement);
+// Movement
+let keys = {};
+document.addEventListener("keydown", e => keys[e.key] = true);
+document.addEventListener("keyup", e => keys[e.key] = false);
 
-  controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.target.set(0, 2, 0);
-  controls.update();
+// Click detection
+canvas.addEventListener("mousedown", e => {
+  let rect = canvas.getBoundingClientRect();
+  let mx = e.clientX - rect.left;
+  let my = e.clientY - rect.top;
 
-  raycaster = new THREE.Raycaster();
-  mouse = new THREE.Vector2();
+  // Bulb toggle
+  if (mx > bulb.x && mx < bulb.x + bulb.w &&
+      my > bulb.y && my < bulb.y + bulb.h) {
+    bulbOn = !bulbOn;
+    return;
+  }
 
-  const ambient = new THREE.AmbientLight(0x222233, 0.4);
-  scene.add(ambient);
-
-  const roomWidth = 10;
-  const roomDepth = 10;
-  const roomHeight = 5;
-
-  const floorGeo = new THREE.PlaneGeometry(roomWidth, roomDepth);
-  const floorMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 });
-  const floor = new THREE.Mesh(floorGeo, floorMat);
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.y = 0;
-  scene.add(floor);
-
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0x303030, roughness: 0.9 });
-  const roomGeo = new THREE.BoxGeometry(roomWidth, roomHeight, roomDepth);
-  const room = new THREE.Mesh(roomGeo, wallMat);
-  room.position.y = roomHeight / 2;
-  room.material.side = THREE.BackSide;
-  scene.add(room);
-
-  const windowGeo = new THREE.PlaneGeometry(3, 2);
-  const windowMat = new THREE.MeshBasicMaterial({
-    color: 0x99bbff,
-    transparent: true,
-    opacity: 0.6
-  });
-  const windowMesh = new THREE.Mesh(windowGeo, windowMat);
-  windowMesh.position.set(0, 3, -roomDepth / 2 + 0.01);
-  scene.add(windowMesh);
-
-  const curtainGeo = new THREE.PlaneGeometry(3.4, 2.6);
-  const curtainMat = new THREE.MeshStandardMaterial({
-    color: 0xdddddd,
-    roughness: 1.0
-  });
-  const curtain = new THREE.Mesh(curtainGeo, curtainMat);
-  curtain.position.set(0, 3, -roomDepth / 2 + 0.02);
-  scene.add(curtain);
-
-  const mattressGeo = new THREE.BoxGeometry(3, 0.4, 1.8);
-  const mattressMat = new THREE.MeshStandardMaterial({
-    color: 0xbba58a,
-    roughness: 0.9
-  });
-  const mattress = new THREE.Mesh(mattressGeo, mattressMat);
-  mattress.position.set(-roomWidth / 2 + 2, 0.2, 0);
-  scene.add(mattress);
-
-  const bulbGeo = new THREE.SphereGeometry(0.2, 16, 16);
-  const bulbMat = new THREE.MeshStandardMaterial({
-    color: 0xffffee,
-    emissive: 0xffffaa,
-    emissiveIntensity: 1.5,
-    roughness: 0.3
-  });
-  bulbMesh = new THREE.Mesh(bulbGeo, bulbMat);
-  bulbMesh.position.set(0, roomHeight - 0.5, 0);
-  scene.add(bulbMesh);
-
-  const wireGeo = new THREE.CylinderGeometry(0.03, 0.03, 1.0, 8);
-  const wireMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.9 });
-  const wire = new THREE.Mesh(wireGeo, wireMat);
-  wire.position.set(0, roomHeight - 1.0, 0);
-  scene.add(wire);
-
-  bulbLight = new THREE.PointLight(0xffffdd, 1.5, 20);
-  bulbLight.position.copy(bulbMesh.position);
-  scene.add(bulbLight);
-
-  const toyMaterial = new THREE.MeshStandardMaterial({ color: 0x996633, roughness: 0.8 });
-  const toyPositions = [
-    new THREE.Vector3(roomWidth / 2 - 2, 0.3, 0),
-    new THREE.Vector3(roomWidth / 2 - 1.5, 0.3, 1.5),
-    new THREE.Vector3(roomWidth / 2 - 1.0, 0.3, -1.2)
-  ];
-
-  toyPositions.forEach((pos, index) => {
-    const toy = createWoodenToy(toyMaterial);
-    toy.position.copy(pos);
-    toy.userData.type = 'toy';
-    toy.userData.id = 'toy_' + index;
-    scene.add(toy);
-    toys.push(toy);
-  });
-
-  const doorGeo = new THREE.BoxGeometry(2, 3, 0.2);
-  const doorMat = new THREE.MeshStandardMaterial({ color: 0x553322, roughness: 0.8 });
-  const door = new THREE.Mesh(doorGeo, doorMat);
-  door.position.set(0, 1.5, roomDepth / 2 - 0.1);
-  scene.add(door);
-
-  window.addEventListener('resize', onWindowResize);
-  renderer.domElement.addEventListener('pointerdown', onPointerDown);
-}
-
-function createWoodenToy(material) {
-  const group = new THREE.Group();
-
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.8, 0.2), material);
-  body.position.y = 0.8;
-  group.add(body);
-
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), material);
-  head.position.y = 1.3;
-  group.add(head);
-
-  const arms = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.15, 0.15), material);
-  arms.position.y = 0.9;
-  group.add(arms);
-
-  const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.6, 0.15), material);
-  leftLeg.position.set(-0.12, 0.4, 0);
-  group.add(leftLeg);
-
-  const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.6, 0.15), material);
-  rightLeg.position.set(0.12, 0.4, 0);
-  group.add(rightLeg);
-
-  return group;
-}
-
-function onPointerDown(event) {
-  const rect = renderer.domElement.getBoundingClientRect();
-  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-  raycaster.setFromCamera(mouse, camera);
-  const intersects = raycaster.intersectObjects(scene.children, true);
-
-  if (intersects.length > 0) {
-    const obj = intersects[0].object;
-
-    if (obj === bulbMesh) {
-      toggleBulb();
+  // Toys
+  for (let t of toys) {
+    if (mx > t.x && mx < t.x + t.w &&
+        my > t.y && my < t.y + t.h) {
+      alert("You inspected: " + t.id);
       return;
     }
+  }
+});
 
-    let target = obj;
-    while (target.parent && target.parent !== scene) {
-      if (target.userData && target.userData.type === 'toy') break;
-      target = target.parent;
-    }
-
-    if (target.userData && target.userData.type === 'toy') {
-      inspectToy(target);
+// Collision check
+function collides(nx, ny) {
+  for (let w of walls) {
+    if (nx < w.x + w.w &&
+        nx + player.size > w.x &&
+        ny < w.y + w.h &&
+        ny + player.size > w.y) {
+      return true;
     }
   }
+  return false;
 }
 
-function toggleBulb() {
-  bulbOn = !bulbOn;
-  bulbLight.intensity = bulbOn ? 1.5 : 0.0;
-  bulbMesh.material.emissiveIntensity = bulbOn ? 1.5 : 0.1;
-  showMessage(bulbOn ? 'Bulb: ON' : 'Bulb: OFF');
+// Game loop
+function loop() {
+  let nx = player.x;
+  let ny = player.y;
+
+  if (keys["ArrowUp"]) ny -= 3;
+  if (keys["ArrowDown"]) ny += 3;
+  if (keys["ArrowLeft"]) nx -= 3;
+  if (keys["ArrowRight"]) nx += 3;
+
+  if (!collides(nx, ny)) {
+    player.x = nx;
+    player.y = ny;
+  }
+
+  draw();
+  requestAnimationFrame(loop);
 }
 
-function inspectToy(toy) {
-  showMessage(`Toy inspected: ${toy.userData.id}`);
-  const originalColor = toy.children[0].material.color.clone();
-  toy.children.forEach(part => {
-    part.material.color.set(0xffcc66);
-  });
-  setTimeout(() => {
-    toy.children.forEach(part => {
-      part.material.color.copy(originalColor);
-    });
-  }, 300);
+function draw() {
+  ctx.fillStyle = bulbOn ? "#222" : "#000";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Walls
+  ctx.fillStyle = "gray";
+  for (let w of walls) ctx.fillRect(w.x, w.y, w.w, w.h);
+
+  // Bulb
+  ctx.fillStyle = bulbOn ? "yellow" : "darkgoldenrod";
+  ctx.fillRect(bulb.x, bulb.y, bulb.w, bulb.h);
+
+  // Toys
+  ctx.fillStyle = "brown";
+  for (let t of toys) ctx.fillRect(t.x, t.y, t.w, t.h);
+
+  // Player
+  ctx.fillStyle = "cyan";
+  ctx.fillRect(player.x, player.y, player.size, player.size);
 }
 
-function onWindowResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-function animate() {
-  requestAnimationFrame(animate);
-  renderer.render(scene, camera);
-}
+loop();
 </script>
+
 </body>
 </html>
